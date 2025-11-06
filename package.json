@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Client-side integration package for Purple Bird Mailer API",
   "main": "form-helper.js",
+  "module": "form-helper.js",
   "files": [
     "netlify-function.js",
     "form-helper.js",
@@ -16,17 +17,21 @@
     "form",
     "netlify",
     "purplebird",
-    "form-submission"
+    "form-submission",
+    "contact-form",
+    "api-client"
   ],
   "author": "Purple Bird Agency",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/purplebird-agency/mailer-client.git"
+    "url": "git+https://github.com/purplebird-agency/mailer-client.git"
   },
   "peerDependencies": {
     "busboy": "^1.6.0",
     "form-data": "^4.0.4"
+  },
+  "engines": {
+    "node": ">=14.0.0"
   }
 }
-
