@@ -1,6 +1,6 @@
 {
   "name": "@purplebird/mailer-client",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Client-side integration package for Purple Bird Mailer API",
   "main": "form-helper.js",
   "module": "form-helper.js",
