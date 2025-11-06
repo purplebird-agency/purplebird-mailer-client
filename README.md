@@ -36,9 +36,7 @@ initMailerForm('#contact-form', {
 
 The `netlify-function.js` file should be deployed as a Netlify Function. It handles form submissions and forwards them to the Purple Bird Mailer API.
 
-**Option 1: Explicit Configuration (Recommended)**
-
-For better flexibility and testability, use the `createMailerHandler()` factory function:
+Create your Netlify function using the `createMailerHandler()` factory function with explicit configuration:
 
 ```javascript
 // netlify/functions/submit-contact.js
@@ -48,32 +46,21 @@ exports.handler = createMailerHandler({
   baseUrl: 'https://mailer.purplebird.agency/api',
   formId: 'your-form-id',
   apiKey: 'your-api-key',
-  debug: false // optional, defaults to MAILER_DEBUG env var or NODE_ENV=development
+  debug: false // optional, defaults to false
 });
 ```
 
-**Option 2: Environment Variables (Backward Compatible)**
+**Configuration Options:**
+- `baseUrl` (required) - Base URL of the Purple Bird Mailer API (e.g., `https://mailer.purplebird.agency/api`)
+- `formId` (required) - Your form ID
+- `apiKey` (required) - Your API key for authentication
+- `debug` (optional) - Enable debug logging (default: `false`)
 
-You can still use environment variables for configuration:
-
-```javascript
-// netlify/functions/submit-contact.js
-const { handler } = require('@purplebird/mailer-client/netlify-function');
-exports.handler = handler;
-```
-
-Or simply copy `netlify-function.js` to your `netlify/functions/` directory and it will work with environment variables out of the box.
-
-**Required Environment Variables (if using Option 2):**
-- `MAILER_BASE_URL` - Base URL of the Purple Bird Mailer API (e.g., `https://mailer.purplebird.agency/api`)
-- `MAILER_FORM_ID` - Your form ID
-- `MAILER_FORM_API_KEY` - Your API key for authentication
-
-**Note:** The explicit configuration pattern (Option 1) is recommended for packages as it:
+**Benefits of explicit configuration:**
 - Makes dependencies explicit and easier to test
 - Allows multiple instances with different configurations
 - Works better in different deployment environments
-- Falls back to environment variables if config is not provided
+- No hidden environment variable dependencies
 
 ## Features
 
@@ -87,10 +74,9 @@ Or simply copy `netlify-function.js` to your `netlify/functions/` directory and 
 
 ## Peer Dependencies
 
-This package requires the following peer dependencies (for the Netlify function):
+This package requires the following peer dependency (for the Netlify function):
 
 - `busboy` (^1.6.0)
-- `form-data` (^4.0.4)
 
 ## License
 

@@ -1,12 +1,9 @@
 const Busboy = require('busboy');
 
-// Debug mode - set MAILER_DEBUG=true or NODE_ENV=development to enable verbose logging
-const DEBUG = process.env.MAILER_DEBUG === 'true' || process.env.NODE_ENV === 'development';
-
 const log = (...args) => {
-  if (DEBUG) {
-    console.log(...args);
-  }
+  // Default log function (used as fallback in handlers)
+  // Actual logging is controlled by the debug flag in createMailerHandler
+  // This is a no-op fallback - handlers should always receive configLog
 };
 
 const logError = (...args) => {
@@ -20,15 +17,24 @@ const logError = (...args) => {
  * @param {string} config.baseUrl - Base URL of the Purple Bird Mailer API (e.g., 'https://mailer.purplebird.agency/api')
  * @param {string} config.formId - Your form ID
  * @param {string} config.apiKey - Your API key for authentication
- * @param {boolean} [config.debug] - Enable debug logging (default: checks MAILER_DEBUG or NODE_ENV)
+ * @param {boolean} [config.debug] - Enable debug logging (default: false)
  * @returns {Function} Netlify Function handler
  */
-function createMailerHandler(config = {}) {
-  // Get config from parameter or fall back to environment variables (for backward compatibility)
-  const MAILER_BASE_URL = config.baseUrl || process.env.MAILER_BASE_URL;
-  const MAILER_FORM_ID = config.formId || process.env.MAILER_FORM_ID;
-  const MAILER_FORM_API_KEY = config.apiKey || process.env.MAILER_FORM_API_KEY;
-  const isDebug = config.debug !== undefined ? config.debug : DEBUG;
+function createMailerHandler(config) {
+  if (!config || typeof config !== 'object') {
+    throw new Error('createMailerHandler requires a configuration object');
+  }
+
+  const { baseUrl, formId, apiKey, debug = false } = config;
+  
+  if (!baseUrl || !formId || !apiKey) {
+    throw new Error('createMailerHandler requires baseUrl, formId, and apiKey in the configuration object');
+  }
+
+  const MAILER_BASE_URL = baseUrl;
+  const MAILER_FORM_ID = formId;
+  const MAILER_FORM_API_KEY = apiKey;
+  const isDebug = debug;
 
   const configLog = (...args) => {
     if (isDebug) {
@@ -50,20 +56,6 @@ function createMailerHandler(config = {}) {
     }
 
     try {
-      if (!MAILER_BASE_URL || !MAILER_FORM_ID || !MAILER_FORM_API_KEY) {
-        return {
-          statusCode: 500,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          },
-          body: JSON.stringify({
-            success: false,
-            error: 'Missing required configuration: baseUrl, formId, and apiKey must be provided either via createMailerHandler() or environment variables (MAILER_BASE_URL, MAILER_FORM_ID, MAILER_FORM_API_KEY)'
-          })
-        };
-      }
-
       const contentType = event.headers['content-type'] || event.headers['Content-Type'] || '';
       const isMultipart = contentType.includes('multipart/form-data');
 
@@ -101,11 +93,7 @@ function createMailerHandler(config = {}) {
   };
 }
 
-// Default export: create handler using environment variables (backward compatibility)
-// Users can also use createMailerHandler() directly for explicit configuration
-exports.handler = createMailerHandler();
-
-// Export the factory function for explicit configuration
+// Export the factory function - configuration must be provided explicitly
 exports.createMailerHandler = createMailerHandler;
 
 async function handleMultipartRequest(event, config) {
@@ -187,15 +175,10 @@ async function handleMultipartRequest(event, config) {
 
     async function forwardRequest() {
       try {
-        // Verify formId is set
-        if (!MAILER_FORM_ID) {
-          throw new Error('MAILER_FORM_ID environment variable is not set');
-        }
-
         // Ensure formId is a string
         const formIdValue = String(MAILER_FORM_ID).trim();
         if (!formIdValue) {
-          throw new Error('MAILER_FORM_ID is empty or invalid');
+          throw new Error('formId is empty or invalid');
         }
         
         configLog('Form ID being sent:', formIdValue);
