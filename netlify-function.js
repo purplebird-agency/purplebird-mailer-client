@@ -1,5 +1,4 @@
 const Busboy = require('busboy');
-const FormData = require('form-data');
 
 // Debug mode - set MAILER_DEBUG=true or NODE_ENV=development to enable verbose logging
 const DEBUG = process.env.MAILER_DEBUG === 'true' || process.env.NODE_ENV === 'development';
@@ -15,26 +14,78 @@ const logError = (...args) => {
   console.error(...args);
 };
 
-exports.handler = async (event, context) => {
-  // Only allow POST requests
-  if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({ error: 'Method not allowed' })
-    };
-  }
+/**
+ * Creates a Netlify Function handler with the provided configuration
+ * @param {Object} config - Configuration object
+ * @param {string} config.baseUrl - Base URL of the Purple Bird Mailer API (e.g., 'https://mailer.purplebird.agency/api')
+ * @param {string} config.formId - Your form ID
+ * @param {string} config.apiKey - Your API key for authentication
+ * @param {boolean} [config.debug] - Enable debug logging (default: checks MAILER_DEBUG or NODE_ENV)
+ * @returns {Function} Netlify Function handler
+ */
+function createMailerHandler(config = {}) {
+  // Get config from parameter or fall back to environment variables (for backward compatibility)
+  const MAILER_BASE_URL = config.baseUrl || process.env.MAILER_BASE_URL;
+  const MAILER_FORM_ID = config.formId || process.env.MAILER_FORM_ID;
+  const MAILER_FORM_API_KEY = config.apiKey || process.env.MAILER_FORM_API_KEY;
+  const isDebug = config.debug !== undefined ? config.debug : DEBUG;
 
-  try {
-    // Get environment variables
-    const MAILER_BASE_URL = process.env.MAILER_BASE_URL;
-    const MAILER_FORM_ID = process.env.MAILER_FORM_ID;
-    const MAILER_FORM_API_KEY = process.env.MAILER_FORM_API_KEY;
+  const configLog = (...args) => {
+    if (isDebug) {
+      console.log(...args);
+    }
+  };
 
-    if (!MAILER_BASE_URL || !MAILER_FORM_ID || !MAILER_FORM_API_KEY) {
+  return async (event, context) => {
+    // Only allow POST requests
+    if (event.httpMethod !== 'POST') {
+      return {
+        statusCode: 405,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+        body: JSON.stringify({ error: 'Method not allowed' })
+      };
+    }
+
+    try {
+      if (!MAILER_BASE_URL || !MAILER_FORM_ID || !MAILER_FORM_API_KEY) {
+        return {
+          statusCode: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          },
+          body: JSON.stringify({
+            success: false,
+            error: 'Missing required configuration: baseUrl, formId, and apiKey must be provided either via createMailerHandler() or environment variables (MAILER_BASE_URL, MAILER_FORM_ID, MAILER_FORM_API_KEY)'
+          })
+        };
+      }
+
+      const contentType = event.headers['content-type'] || event.headers['Content-Type'] || '';
+      const isMultipart = contentType.includes('multipart/form-data');
+
+      if (isMultipart) {
+        // Handle multipart/form-data (with file uploads)
+        return await handleMultipartRequest(event, {
+          MAILER_BASE_URL,
+          MAILER_FORM_ID,
+          MAILER_FORM_API_KEY,
+          log: configLog
+        });
+      } else {
+        // Handle JSON request (backward compatibility)
+        return await handleJsonRequest(event, {
+          MAILER_BASE_URL,
+          MAILER_FORM_ID,
+          MAILER_FORM_API_KEY,
+          log: configLog
+        });
+      }
+    } catch (error) {
+      logError('Submit contact error:', error);
       return {
         statusCode: 500,
         headers: {
@@ -43,54 +94,29 @@ exports.handler = async (event, context) => {
         },
         body: JSON.stringify({
           success: false,
-          error: 'Missing required environment variables: MAILER_BASE_URL, MAILER_FORM_ID, MAILER_FORM_API_KEY'
+          error: error.message || 'Internal server error'
         })
       };
     }
+  };
+}
 
-    const contentType = event.headers['content-type'] || event.headers['Content-Type'] || '';
-    const isMultipart = contentType.includes('multipart/form-data');
+// Default export: create handler using environment variables (backward compatibility)
+// Users can also use createMailerHandler() directly for explicit configuration
+exports.handler = createMailerHandler();
 
-    if (isMultipart) {
-      // Handle multipart/form-data (with file uploads)
-      return await handleMultipartRequest(event, {
-        MAILER_BASE_URL,
-        MAILER_FORM_ID,
-        MAILER_FORM_API_KEY
-      });
-    } else {
-      // Handle JSON request (backward compatibility)
-      return await handleJsonRequest(event, {
-        MAILER_BASE_URL,
-        MAILER_FORM_ID,
-        MAILER_FORM_API_KEY
-      });
-    }
-  } catch (error) {
-    logError('Submit contact error:', error);
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: false,
-        error: error.message || 'Internal server error'
-      })
-    };
-  }
-};
+// Export the factory function for explicit configuration
+exports.createMailerHandler = createMailerHandler;
 
 async function handleMultipartRequest(event, config) {
-  const { MAILER_BASE_URL, MAILER_FORM_ID, MAILER_FORM_API_KEY } = config;
+  const { MAILER_BASE_URL, MAILER_FORM_ID, MAILER_FORM_API_KEY, log: configLog = log } = config;
   
   // Debug logging
-  log('=== handleMultipartRequest Debug ===');
-  log('Content-Type:', event.headers['content-type'] || event.headers['Content-Type']);
-  log('isBase64Encoded:', event.isBase64Encoded);
-  log('Body length:', event.body?.length || 0);
-  log('Body preview (first 200 chars):', event.body?.substring(0, 200));
+  configLog('=== handleMultipartRequest Debug ===');
+  configLog('Content-Type:', event.headers['content-type'] || event.headers['Content-Type']);
+  configLog('isBase64Encoded:', event.isBase64Encoded);
+  configLog('Body length:', event.body?.length || 0);
+  configLog('Body preview (first 200 chars):', event.body?.substring(0, 200));
   
   return new Promise((resolve, reject) => {
     const busboy = Busboy({ headers: event.headers });
@@ -110,11 +136,11 @@ async function handleMultipartRequest(event, config) {
 
     busboy.on('file', (name, file, info) => {
       const { filename, encoding, mimeType } = info;
-      log(`[Busboy] File detected: name="${name}", filename="${filename}", mimeType="${mimeType}"`);
+      configLog(`[Busboy] File detected: name="${name}", filename="${filename}", mimeType="${mimeType}"`);
       
       // Skip if no filename (empty file input)
       if (!filename || filename.trim() === '') {
-        log('[Busboy] Skipping empty file input');
+        configLog('[Busboy] Skipping empty file input');
         file.resume(); // Drain the stream
         return;
       }
@@ -124,12 +150,12 @@ async function handleMultipartRequest(event, config) {
       
       file.on('data', (chunk) => {
         chunks.push(chunk);
-        log(`[Busboy] File "${filename}" chunk received: ${chunk.length} bytes`);
+        configLog(`[Busboy] File "${filename}" chunk received: ${chunk.length} bytes`);
       });
 
       file.on('end', () => {
         const buffer = Buffer.concat(chunks);
-        log(`[Busboy] File "${filename}" complete: ${buffer.length} bytes total`);
+        configLog(`[Busboy] File "${filename}" complete: ${buffer.length} bytes total`);
         
         // Only add files with actual content
         if (buffer.length > 0) {
@@ -141,7 +167,7 @@ async function handleMultipartRequest(event, config) {
             size: buffer.length 
           });
         } else {
-          log(`[Busboy] Skipping empty file: ${filename}`);
+          configLog(`[Busboy] Skipping empty file: ${filename}`);
         }
         
         completedFiles++;
@@ -172,10 +198,10 @@ async function handleMultipartRequest(event, config) {
           throw new Error('MAILER_FORM_ID is empty or invalid');
         }
         
-        log('Form ID being sent:', formIdValue);
-        log('Fields being sent:', Object.keys(fields));
-        log('Total fields:', Object.keys(fields).length);
-        log('Total files:', files.length);
+        configLog('Form ID being sent:', formIdValue);
+        configLog('Fields being sent:', Object.keys(fields));
+        configLog('Total fields:', Object.keys(fields).length);
+        configLog('Total files:', files.length);
 
         // Manually construct multipart form data as a string
         // This ensures compatibility with the mailer's parser
@@ -222,13 +248,13 @@ async function handleMultipartRequest(event, config) {
         );
         const multipartBody = Buffer.concat(buffers);
         
-        log('Constructed multipart body size:', multipartBody.length);
-        log('Boundary:', boundary);
+        configLog('Constructed multipart body size:', multipartBody.length);
+        configLog('Boundary:', boundary);
         
         // Forward to mailer upload endpoint
         // MAILER_BASE_URL should include /api path (e.g. https://mailer.purplebird.agency/api)
         const uploadUrl = `${MAILER_BASE_URL}/form-submissions-upload`;
-        log('Sending to mailer upload endpoint:', uploadUrl);
+        configLog('Sending to mailer upload endpoint:', uploadUrl);
         
         const mailerResponse = await fetch(uploadUrl, {
           method: 'POST',
@@ -239,7 +265,7 @@ async function handleMultipartRequest(event, config) {
           body: multipartBody,
         });
         
-        log('Mailer response status:', mailerResponse.status);
+        configLog('Mailer response status:', mailerResponse.status);
 
         const responseContentType = mailerResponse.headers.get('content-type') || '';
         let mailerJson;
@@ -300,7 +326,7 @@ async function handleMultipartRequest(event, config) {
     }
 
     busboy.on('finish', () => {
-      log(`[Busboy] Parsing finished. Fields: ${Object.keys(fields).length}, Files: ${files.length}, Pending: ${pendingFiles}`);
+      configLog(`[Busboy] Parsing finished. Fields: ${Object.keys(fields).length}, Files: ${files.length}, Pending: ${pendingFiles}`);
       fieldsProcessed = true;
       // If no files, forward immediately
       if (pendingFiles === 0) {
@@ -333,7 +359,7 @@ async function handleMultipartRequest(event, config) {
 }
 
 async function handleJsonRequest(event, config) {
-  const { MAILER_BASE_URL, MAILER_FORM_ID, MAILER_FORM_API_KEY } = config;
+  const { MAILER_BASE_URL, MAILER_FORM_ID, MAILER_FORM_API_KEY, log: configLog = log } = config;
   
   const body = JSON.parse(event.body || '{}');
   
@@ -342,7 +368,7 @@ async function handleJsonRequest(event, config) {
   delete body['bot-field'];
 
   // Forward to mailer API (regular endpoint)
-  log('Sending to mailer:', `${MAILER_BASE_URL}/form-submissions`);
+  configLog('Sending to mailer:', `${MAILER_BASE_URL}/form-submissions`);
   const mailerResponse = await fetch(`${MAILER_BASE_URL}/form-submissions`, {
     method: 'POST',
     headers: {

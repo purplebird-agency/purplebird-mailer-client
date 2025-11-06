@@ -31,8 +31,7 @@
     "url": "git+https://github.com/purplebird-agency/purplebird-mailer-client.git"
   },
   "peerDependencies": {
-    "busboy": "^1.6.0",
-    "form-data": "^4.0.4"
+    "busboy": "^1.6.0"
   },
   "engines": {
     "node": ">=14.0.0"

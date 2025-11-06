@@ -45,11 +45,49 @@ jobs:
           fi
           echo "✓ Version match confirmed: $PACKAGE_VERSION"
       
+      - name: Check if version already published
+        id: check_version
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          
+          # Check if version exists on npm
+          if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version > /dev/null 2>&1; then
+            echo "Version ${PACKAGE_VERSION} already exists on npm"
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "published_version=$(npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version)" >> $GITHUB_OUTPUT
+          else
+            echo "Version ${PACKAGE_VERSION} is new and ready to publish"
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+        continue-on-error: true
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      
       - name: Install dependencies (if any)
         run: npm ci || echo "No dependencies to install"
       
       - name: Publish to npm
+        if: steps.check_version.outputs.exists != 'true'
         run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      
+      - name: Skip publish (version exists)
+        if: steps.check_version.outputs.exists == 'true'
+        run: |
+          echo "⚠️  Version ${{ steps.tag_version.outputs.version }} already exists on npm"
+          echo "Skipping publish. If you intended to republish, bump the version first."
+          exit 0
+      
+      - name: Notify Slack on failure
+        if: failure()
+        run: |
+          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            curl -X POST -H 'Content-type: application/json' \
+              --data "{\"channel\":\"#health\",\"text\":\"❌ *npm Publish Failed*\n\nRepository: ${{ github.repository }}\nVersion: ${{ steps.tag_version.outputs.version }}\nWorkflow: ${{ github.workflow }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\nActor: ${{ github.actor }}\"}" \
+              ${{ secrets.SLACK_WEBHOOK_URL }}
+          else
+            echo "SLACK_WEBHOOK_URL secret not set, skipping Slack notification"
+          fi
 

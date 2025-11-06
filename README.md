@@ -36,10 +36,44 @@ initMailerForm('#contact-form', {
 
 The `netlify-function.js` file should be deployed as a Netlify Function. It handles form submissions and forwards them to the Purple Bird Mailer API.
 
-**Required Environment Variables:**
+**Option 1: Explicit Configuration (Recommended)**
+
+For better flexibility and testability, use the `createMailerHandler()` factory function:
+
+```javascript
+// netlify/functions/submit-contact.js
+const { createMailerHandler } = require('@purplebird/mailer-client/netlify-function');
+
+exports.handler = createMailerHandler({
+  baseUrl: 'https://mailer.purplebird.agency/api',
+  formId: 'your-form-id',
+  apiKey: 'your-api-key',
+  debug: false // optional, defaults to MAILER_DEBUG env var or NODE_ENV=development
+});
+```
+
+**Option 2: Environment Variables (Backward Compatible)**
+
+You can still use environment variables for configuration:
+
+```javascript
+// netlify/functions/submit-contact.js
+const { handler } = require('@purplebird/mailer-client/netlify-function');
+exports.handler = handler;
+```
+
+Or simply copy `netlify-function.js` to your `netlify/functions/` directory and it will work with environment variables out of the box.
+
+**Required Environment Variables (if using Option 2):**
 - `MAILER_BASE_URL` - Base URL of the Purple Bird Mailer API (e.g., `https://mailer.purplebird.agency/api`)
 - `MAILER_FORM_ID` - Your form ID
 - `MAILER_FORM_API_KEY` - Your API key for authentication
+
+**Note:** The explicit configuration pattern (Option 1) is recommended for packages as it:
+- Makes dependencies explicit and easier to test
+- Allows multiple instances with different configurations
+- Works better in different deployment environments
+- Falls back to environment variables if config is not provided
 
 ## Features
 
@@ -97,6 +131,8 @@ These scripts will:
 - Push to GitHub
 - Trigger the GitHub Action to publish to npm
 
+**Note:** The workflow automatically checks if a version already exists on npm and will skip publishing if it does (to prevent errors). Always bump the version before publishing.
+
 **Option 2: Manual tagging**
 ```bash
 # Update version in package.json manually, then:
@@ -113,5 +149,5 @@ npm publish --access public
 
 ## Repository
 
-https://github.com/purplebird-agency/mailer-client
+https://github.com/purplebird-agency/purplebird-mailer-client
 
