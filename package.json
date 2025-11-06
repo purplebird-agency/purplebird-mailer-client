@@ -28,7 +28,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/purplebird-agency/mailer-client.git"
+    "url": "git+https://github.com/purplebird-agency/purplebird-mailer-client.git"
   },
   "peerDependencies": {
     "busboy": "^1.6.0",
