@@ -62,6 +62,55 @@ This package requires the following peer dependencies (for the Netlify function)
 
 MIT
 
+## Publishing
+
+This package uses GitHub Actions for automated publishing to npm. To publish a new version:
+
+### Setup (One-time)
+
+1. Create an npm access token with publish permissions:
+   - Go to https://www.npmjs.com/settings/[your-username]/tokens
+   - Create a new "Automation" token
+   - Copy the token
+
+2. Add the token as a GitHub secret:
+   - Go to your repository settings → Secrets and variables → Actions
+   - Add a new secret named `NPM_TOKEN` with your npm token value
+
+### Publishing a New Version
+
+**Option 1: Using npm scripts (recommended)**
+```bash
+# Patch version (1.0.0 → 1.0.1)
+npm run version:patch
+
+# Minor version (1.0.0 → 1.1.0)
+npm run version:minor
+
+# Major version (1.0.0 → 2.0.0)
+npm run version:major
+```
+
+These scripts will:
+- Update `package.json` version
+- Create a git commit and tag (e.g., `v1.0.1`)
+- Push to GitHub
+- Trigger the GitHub Action to publish to npm
+
+**Option 2: Manual tagging**
+```bash
+# Update version in package.json manually, then:
+git add package.json
+git commit -m "chore: bump version to 1.0.1"
+git tag v1.0.1
+git push origin main --tags
+```
+
+**Option 3: Manual publish (for testing)**
+```bash
+npm publish --access public
+```
+
 ## Repository
 
 https://github.com/purplebird-agency/mailer-client
